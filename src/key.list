@@ -3,3 +3,12 @@ backward /1e-1/
 stop /1e-1/
 right /1e-1/
 left /1e-1/
+takeoff /1e-1/
+climb /1e-1/
+one /1e-1/
+two /1e-1/
+three /1e-1/
+home /1e-1/
+ten /1e-1/
+twenty /1e-1/
+land /1e-1/
