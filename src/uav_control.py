@@ -19,15 +19,15 @@ class UAV_Control():
         self.odom = Odometry()
         self.rate = rospy.Rate(10)
         rospy.Subscriber('/voice_recognition', String, self.command_callback)
-        self.odom = rospy.Subscriber('/uav/odometry', Odometry, self.odometry_callback)
+        rospy.Subscriber('/uav/odometry', Odometry, self.odometry_callback)
 
-        self.position.x = 0
-        self.position.y = 0
-        self.position.z = 0
-        self.orientation.x = 0
-        self.orientation.y = 0
-        self.orientation.z = 0
-        self.orientation.w = 0
+        self.position.x = self.odom.pose.pose.position.x
+        self.position.y = self.odom.pose.pose.position.y
+        self.position.z = self.odom.pose.pose.position.z
+        self.orientation.x = self.odom.pose.pose.orientation.x
+        self.orientation.y = self.odom.pose.pose.orientation.y
+        self.orientation.z = self.odom.pose.pose.orientation.z
+        self.orientation.w = self.odom.pose.pose.orientation.w
 
     def odometry_callback(self, msg):
         self.odom = msg
@@ -37,11 +37,27 @@ class UAV_Control():
         print(self.detected_word)
 
         if 'land' in self.detected_word:
-            self.position.z = 1
-            time.sleep(2)
-            self.position.z = 0.5
-            time.sleep(2)
-            self.position.z = 0
+            if self.position.z >= 2:
+                self.position.z = 1
+                time.sleep(3)
+                self.position.z = 0.5
+                time.sleep(2)
+                self.position.z = 0
+
+            elif self.position.z >= 1 and self.position.z < 2:
+                self.position.z = 0.7
+                time.sleep(3)
+                self.position.z = 0.5
+                time.sleep(2)
+                self.position.z = 0
+
+            elif self.position.z > 0.5 and self.position.z < 1:
+                self.position.z = 0.5
+                time.sleep(2)
+                self.position.z = 0
+
+            elif self.position.z <= 0.5:
+                self.position.z = 0
 
         if 'climb' in self.detected_word:
             if 'one' in self.detected_word:
@@ -79,10 +95,14 @@ class UAV_Control():
             print('uav_control:forward')
 
         if 'takeoff' in self.detected_word:
-            self.position.z = 0.5
-            time.sleep(3)
-            self.position.z = 1
-            print('uav_control:take_off')
+            if self.position.z == 0:
+                self.position.z = 0.5
+                time.sleep(3)
+                self.position.z = 1
+                print('uav_control:take_off')
+            else:
+                print('uav:airborne')
+
     def run(self):
         while not rospy.is_shutdown():
             self.pub_command.publish(self.position, self.orientation)
