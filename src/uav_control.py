@@ -36,6 +36,11 @@ class UAV_Control():
         self.detected_word = str(msg.data)
         print(self.detected_word)
 
+        ## TODO: LOGIC FOR Sending commands put into run method! Not in callback, we could use while to block command execution and 
+        ## Wait for UAV to reach certain reference
+        
+
+        ### FROM HERE
         if 'takeoff' in self.detected_word:
             if self.position.z == 0:
                 self.position.z = 0.5
@@ -46,42 +51,24 @@ class UAV_Control():
                 print('uav: airborne')
 
         if 'land' in self.detected_word:
-            if self.position.z >= 2:
-                self.position.z = 1
-                time.sleep(3)
-                self.position.z = 0.5
-                time.sleep(2)
-                self.position.z = 0
+            while not self.current_pose.position.z < 0.1:
+                
+                # TODO: Create cmd_pose variable and initailze it as empty Pose message in constructor, use it for sending commands
+                # self.cmd_pose.position.z = self.current_pose.position.z - 0.1 
+                # My idea was to use knowledge of current pose(position/orientation) and to decrease height value until we hit ground. 
+                
+                self.cmd_pose.position.z = self.current_pose.position.z - 0.1
+                # INVOKE publish in while loop / CAN BE IN send_command method
+                # self.publish....
+                # USE WHILE TO
 
-            elif self.position.z >= 1 and self.position.z < 2:
-                self.position.z = 0.7
-                time.sleep(3)
-                self.position.z = 0.5
-                time.sleep(2)
-                self.position.z = 0
-
-            elif self.position.z > 0.5 and self.position.z < 1:
-                self.position.z = 0.5
-                time.sleep(2)
-                self.position.z = 0
-
-            elif self.position.z <= 0.5:
-                self.position.z = 0
 
         if 'climb' in self.detected_word:
-            if 'one' in self.detected_word:
-                self.position.z += 0.1
-                print("Penjem se 10cm")
-            elif 'two' in self.detected_word:
-                self.position.z += 0.2
-                print("Penjem se 20cm")
-            elif 'three' in self.detected_word:
-                self.position.z += 0.3
-                print("Penjem se 30cm")
-            elif 'ten' in self.detected_word:
-                self.position.z += 1
-                print("Penjem se 100cm")
-            self.orientation.w = 1
+            epsilon_ = 0.01 
+            # Nije tako trivijalno jer treba uzeti u obzir zadanu referencu (self.voice_detected_increment)
+            while not abs(self.current_pose.position.z - self.cmd_pose.position.z) < self.voice_detected_increment:
+                self.cmd_pose.position.z = self.current_pose.position.z + 0.1 # Assign cmd_pose.position
+
 
         if 'right' in self.detected_word:
             if 'one' in self.detected_word:
@@ -138,6 +125,9 @@ class UAV_Control():
             elif 'ten' in self.detected_word:
                 self.position.y -= 1
                 print("Idem naprijed za 100cm")
+        
+        ########### 
+        # TO HERE
 
         """
         if self.detected_word == 'stop':
@@ -153,6 +143,11 @@ class UAV_Control():
 
     def run(self):
         while not rospy.is_shutdown():
+
+            # TODO: Change variables for sending cmd
+            # ONE VARIABLE FOR ODOMETRY READING AND CURRENT POSITION/ORIENTATION READING 
+            # ONE VARIABLE FOR CURRENT POSE COMMAND, DO NOT USE SAME VARIABLES FOR CURRENT POSE READING AND CURRENT COMMAND!!!!
+
             self.pub_command.publish(self.position, self.orientation)
             #if self.pub_command.publish(self.position, self.orientation) != 'None':
                 #print(self.pub_command.publish(self.position, self.orientation))
