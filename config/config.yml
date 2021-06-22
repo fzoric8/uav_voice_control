@@ -1,0 +1,11 @@
+mode:
+    oscar: 0.1
+    romeo: 0.3
+    sierra: 0.5
+    charlie: 1.0
+
+yaw_angle:
+    oscar: 45.0
+    romeo: 60.0       
+    sierra: 90.0      
+    charlie: 180.0

@@ -1,0 +1,4 @@
+<launch>
+	<node pkg = "uav_voice_control" name = "voice_recognition" type = "voice_rec.py"/>
+	<node pkg = "uav_voice_control" name = "uav_control" type = "uav_control.py"/>
+</launch>

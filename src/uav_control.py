@@ -2,18 +2,24 @@
 
 import rospy
 import time
+import yaml
+import math
+import numpy as np
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Point
 from geometry_msgs.msg import Quaternion
-from uav_voice_control.srv import ProvideMove, ProvideMoveResponse
 
 
 class UAV_Control():
 
     def __init__(self):
-        self.pub_command = rospy.Publisher('/command', Pose, queue_size=10)
+
+        with open("/home/filip/catkin_ws/src/uav_voice_control/config/config.yml", "r") as ymlfile:
+            self.cfg = yaml.load(ymlfile)
+
+        self.pub_command = rospy.Publisher('/uav/pose_ref', Pose, queue_size=10)
         self.detected_word = String()
         self.position = Point()
         self.orientation = Quaternion()
@@ -21,189 +27,232 @@ class UAV_Control():
         self.rate = rospy.Rate(10)
         self.cmd_pose = Pose()
         self.wanted_pose = Pose()
+        self.last_position = Pose()
         self.current_pose_odom = Odometry()
+        self.mode = 'charlie'
+        self.cmd_increment = self.cfg["mode"]["charlie"]
+        # self.voice_detected_increment = 0
+        # self.current_yaw_angle = []
+        self.yaw_angle = math.radians(self.cfg["yaw_angle"]["charlie"])
+        self.yaw_angle_E = [0.0, 0.0, 0.0]
+        self.yaw_angle_Q = [0.0, 0.0, 0.0, 0.0]
         self.var = ''
+        self.recv_stop = False
+        self.detected_word = ''
+        rospy.Subscriber('/voice_recognition', String, self.received_stop_callback)
         rospy.Subscriber('/voice_recognition', String, self.command_callback)
         rospy.Subscriber('/uav/odometry', Odometry, self.odometry_callback)
 
-        try:
-            self.s1 = rospy.Service('provide_move', ProvideMove, self.provide_move_callback)
-        except rospy.ServiceException as exc:
-            print("Service already registred, but I am still working!\n")
-
-    def provide_move_callback(self, rec):
-        """For service and communication with smatch"""
-        self.r_word = rec.word
-        self.resp = ProvideMoveResponse()
-
-        self.resp.response = True
-
-        return self.resp
-
+        print(f"=====================\nCurrent mode: {self.mode}\n  Reference: {self.cmd_increment}\n  "
+              f"Yaw angle reference: {self.yaw_angle}\nStart with begin\n---")
 
     def odometry_callback(self, msg):
         """Callback for reading current position via odometry"""
         self.current_pose_odom = msg.pose.pose
-        # print(self.current_pose)
+
+    def received_stop_callback(self, msg):
+        if str(msg.data) == 'stop ':
+            self.recv_stop = True
+            print(self.recv_stop)
 
     def command_callback(self, msg):
         self.detected_word = str(msg.data)
-        print(self.detected_word)
+        print(f"Detected word is {self.detected_word}")
 
-        self.voice_detected_increment = 0
+        if 'charlie' in self.detected_word:
+            self.mode = 'charlie'
+            self.cmd_increment = self.cfg["mode"]["charlie"]
+            self.yaw_angle = math.radians(self.cfg["yaw_angle"]["charlie"])
+            print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
+                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n  Only in this mode is possible begin & finish\n---")
 
-        if 'one' in self.detected_word:
-            self.voice_detected_increment = 0.1
-        elif 'two' in self.detected_word:
-            self.voice_detected_increment = 0.2
-        elif 'three' in self.detected_word:
-            self.voice_detected_increment = 0.3
-        elif 'ten' in self.detected_word:
-            self.voice_detected_increment = 1.0
-        print(self.voice_detected_increment)
+        elif 'oscar' in self.detected_word:
+            self.mode = 'oscar'
+            self.cmd_increment = self.cfg["mode"]["oscar"]
+            self.yaw_angle = math.radians(self.cfg["yaw_angle"]["oscar"])
+            print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
+                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n---")
 
+        elif 'romeo' in self.detected_word:
+            self.mode = 'romeo'
+            self.cmd_increment = self.cfg["mode"]["romeo"]
+            self.yaw_angle = math.radians(self.cfg["yaw_angle"]["romeo"])
+            print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
+                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n---")
 
-        ## TODO: LOGIC FOR Sending commands put into run method! Not in callback, we could use while to block command execution and 
-        ## Wait for UAV to reach certain reference
+        elif 'sierra' in self.detected_word:
+            self.mode = 'sierra'
+            self.cmd_increment = self.cfg["mode"]["sierra"]
+            self.yaw_angle = math.radians(self.cfg["yaw_angle"]["sierra"])
+            print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
+                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n---")
 
-        ### FROM HERE
-        if 'takeoff' in self.detected_word:
-            if round(self.current_pose_odom.position.z) == 0:
-                self.cmd_pose.position.z = 0.5
-                self.cmd_pose.orientation.w = 1
-                time.sleep(3)
-                self.cmd_pose.position.z = 1
-                print('uav_control: take_off')
-            else:
-                print('uav: airborne')
+        elif 'zulu' in self.detected_word:
+            self.mode = 'zulu'
+            print("======================")
+            print(f"Switch mode:\n  Current mode: {self.mode}\n---")
 
-        if 'stop' in self.detected_word:
-            self.cmd_pose = self.current_pose_odom
+        """ Mode: Charlie
+                - emergency mode
+                - reference: 1 meter
+                - yaw: 180deg
+                - takeoff & finish only possible in this mode 
+            
+            Mode: Oscar
+                - fine control mode
+                - reference: 0.1 meter
+                - yaw: 45deg 
 
-        if 'land' in self.detected_word:
-            self.var = 'land'
+            Mode: Romeo
+                - reference: 0.3 meter
+                - yaw: 60deg 
 
-        if 'climb' in self.detected_word:
-            epsilon_ = 0.01
-            print('==============================')
-            print('Climbing for ' + str(self.voice_detected_increment))
-            #self.wanted_pose.position.z = self.current_pose_odom.position.z + self.voice_detected_increment
+            Mode: Sierra
+                - reference: 0.5 meter
+                - yaw: 90deg 
 
-            # Nije tako trivijalno jer treba uzeti u obzir zadanu referencu (self.voice_detected_increment)
-            while not abs(self.current_pose_odom.position.z - self.cmd_pose.position.z) < 0.05: #self.voice_detected_increment:
-                self.cmd_pose.position.z = self.current_pose_odom.position.z + 0.1  # Assign cmd_pose.position
-            print('Climbed for ' + str(self.voice_detected_increment))
-            print('Current altitude is ' + str(self.current_pose_odom.position.z))
+            Mode: Zulu """
 
-        if 'down' in self.detected_word:
-            epsilon_ = 0.01
-            self.wanted_pose.position.z = self.current_pose_odom.position.z - self.voice_detected_increment
-            while not abs(self.current_pose_odom.position.z - self.wanted_pose.position.z) > self.voice_detected_increment:
-                self.cmd_pose.position.z = self.current_pose_odom.position.z - 0.1
+        """ Begin & finish """
+        if self.mode == 'charlie':
+            if 'begin' in self.detected_word:
+                if round(self.current_pose_odom.position.z) == 0:
+                    self.cmd_pose.position.z = 0.5
+                    #self.cmd_pose.orientation.w = 1
+                    time.sleep(3)
+                    self.cmd_pose.position.z = 1
+                    print('uav_control: take_off\n---')
+                else:
+                    print('uav: airborne\n---')
 
-        if 'right' in self.detected_word:
-            epsilon_ = 0.01
-            self.wanted_pose.position.x = self.current_pose_odom.position.x + self.voice_detected_increment
-            while not abs(self.current_pose_odom.position.x - self.wanted_pose.position.x) > self.voice_detected_increment:
-                self.cmd_pose.position.x = self.current_pose_odom.position.x + 0.1
+            if 'finish' in self.detected_word:
+                self.var = 'finish'
 
-        if 'left' in self.detected_word:
-            epsilon_ = 0.01
-            self.wanted_pose.position.x = self.current_pose_odom.position.x - self.voice_detected_increment
-            while not abs(self.current_pose_odom.position.x - self.wanted_pose.position.x) > self.voice_detected_increment:
-                self.cmd_pose.position.x = self.current_pose_odom.position.x - 0.1
+        self.last_position = self.current_pose_odom
 
-        if 'forward' in self.detected_word:
-            epsilon_ = 0.01
-            self.wanted_pose.position.y = self.current_pose_odom.position.y + self.voice_detected_increment
-            while not abs(self.current_pose_odom.position.y - self.wanted_pose.position.y) > self.voice_detected_increment:
-                self.cmd_pose.position.y = self.current_pose_odom.position.y + 0.1
+        if self.mode == 'charlie' or self.mode == 'oscar' or self.mode == 'romeo' or self.mode == 'sierra':
+            if 'climb' in self.detected_word:
+                self.wanted_pose.position.z = (self.current_pose_odom.position.z + self.cmd_increment)
+                while not round(self.current_pose_odom.position.z, 1) == round(self.wanted_pose.position.z, 1):
+                    if self.mode == 'charlie' or self.mode == 'sierra':
+                        self.cmd_pose.position.z = self.current_pose_odom.position.z + 0.14
+                    elif self.mode == 'romeo' or self.mode == 'oscar':
+                        self.cmd_pose.position.z = self.current_pose_odom.position.z + 0.07
 
-        if 'backward' in self.detected_word:
-            epsilon_ = 0.01
-            self.wanted_pose.position.y = self.current_pose_odom.position.y - self.voice_detected_increment
-            while not abs(self.current_pose_odom.position.y - self.wanted_pose.position.y) > self.voice_detected_increment:
-                self.cmd_pose.position.y = self.current_pose_odom.position.y - 0.1
+            if 'down' in self.detected_word:
+                self.wanted_pose.position.z = self.current_pose_odom.position.z - self.cmd_increment
+                while not round(self.current_pose_odom.position.z, 1) == round(self.wanted_pose.position.z, 1) or \
+                        round(self.current_pose_odom.poistion.z) == 0:
+                    if self.mode == 'charlie' or self.mode == 'sierra':
+                        self.cmd_pose.position.z = self.current_pose_odom.position.z - 0.14
+                    elif self.mode == 'romeo' or self.mode == 'oscar':
+                        self.cmd_pose.position.z = self.current_pose_odom.position.z - 0.07
 
-        """while not self.current_pose_odom.position.z < 0.1:
-            # TODO: Create cmd_pose variable and initailze it as empty Pose message in constructor, use it for sending commands
-            # self.cmd_pose.position.z = self.current_pose.position.z - 0.1
-            # My idea was to use knowledge of current pose(position/orientation) and to decrease height value until we hit ground.
+            if 'right' in self.detected_word:
+                self.wanted_pose.position.x = self.current_pose_odom.position.x + self.cmd_increment
+                while not round(self.current_pose_odom.position.x, 1) == round(self.wanted_pose.position.x, 1):
+                    if self.mode == 'charlie' or self.mode == 'sierra':
+                        self.cmd_pose.position.x = self.current_pose_odom.position.x + 0.14
+                    elif self.mode == 'romeo' or self.mode == 'oscar':
+                        self.cmd_pose.position.x = self.current_pose_odom.position.x + 0.07
 
-            self.cmd_pose.position.z = self.current_pose_odom.position.z - 0.1
-            # INVOKE publish in while loop / CAN BE IN send_command method
-            # self.publish....
-            # USE WHILE TO"""
+            if 'left' in self.detected_word:
+                self.wanted_pose.position.x = self.current_pose_odom.position.x - self.cmd_increment
+                while not round(self.current_pose_odom.position.x, 1) == round(self.wanted_pose.position.x, 1):
+                    if self.mode == 'charlie' or self.mode == 'sierra':
+                        self.cmd_pose.position.x = self.current_pose_odom.position.x - 0.14
+                    elif self.mode == 'romeo' or self.mode == 'oscar':
+                        self.cmd_pose.position.x = self.current_pose_odom.position.x - 0.07
 
+            if 'forward' in self.detected_word:
+                self.wanted_pose.position.y = self.current_pose_odom.position.y + self.cmd_increment
+                while not round(self.current_pose_odom.position.y, 1) == round(self.wanted_pose.position.y, 1):
+                    if self.mode == 'charlie' or self.mode == 'sierra':
+                        self.cmd_pose.position.y = self.current_pose_odom.position.y + 0.14
+                    elif self.mode == 'romeo' or self.mode == 'oscar':
+                        self.cmd_pose.position.y = self.current_pose_odom.position.y + 0.07
 
-        """if 'home' in self.detected_word:
-            self.wanted_pose.position.x = 0
-            self.wanted_pose.position.y = 0
-            while not abs(self.current_pose_odom.position.x - 0.1) == self.wanted_pose.position.x:
-                if self.current_pose_odom.position.x < 0:
-                    self.cmd_pose.position.x = self.current_pose_odom.position.x + 0.1
-                elif self.current_pose_odom.position.x > 0:
-                    self.cmd_pose.position.x = self.current_pose_odom.position.x - 0.1
-                while not abs(self.current_pose_odom.position.y - 0.1) == self.wanted_pose.position.y:
-                    if self.current_pose_odom.position.y < 0:
-                        self.cmd_pose.position.y = self.current_pose_odom.position.y + 0.1
-                    elif self.current_pose_odom.position.y > 0:
-                        self.cmd_pose.position.y = self.current_pose_odom.position.y - 0.1"""
+            if 'backward' in self.detected_word:
+                self.wanted_pose.position.y = self.current_pose_odom.position.y - self.cmd_increment
+                while not round(self.current_pose_odom.position.y, 1) == round(self.wanted_pose.position.y, 1):
+                    if self.mode == 'charlie' or self.mode == 'sierra':
+                        self.cmd_pose.position.y = self.current_pose_odom.position.y - 0.14
+                    elif self.mode == 'romeo' or self.mode == 'oscar':
+                        self.cmd_pose.position.y = self.current_pose_odom.position.y - 0.07
 
-        """
-        if 'right' in self.detected_word:
-            if 'one' in self.detected_word:
-                self.position.x += 0.1
-                print("Idem desno za 10cm")
-            elif 'two' in self.detected_word:
-                self.position.x += 0.2
-                print("Idem desno za 20cm")
-            elif 'three' in self.detected_word:
-                self.position.x += 0.3
-                print("Idem desno za 30cm")
-            elif 'ten' in self.detected_word:
-                self.position.x += 1
-                print("Idem desno za 100cm")"""
+            if 'climb' in self.detected_word or 'down' in self.detected_word or 'right' in self.detected_word or \
+                    'left' in self.detected_word or 'forward' in self.detected_word or 'backward' in self.detected_word:
+                print(f"Moving for {self.cmd_increment} in direction {self.detected_word}.")
+                print(f"Current position:\n{self.current_pose_odom.position}\n---")
 
-        ###########
-        # TO HERE
+            if 'spin' in self.detected_word:
+                #self.current_yaw_angle = self.quat_to_eul(self.current_pose_odom.orientation)
+                self.yaw_angle_E[2] = self.yaw_angle_E[2] + self.yaw_angle
+                self.yaw_angle_Q = self.eul_to_quat(self.yaw_angle_E)
+                self.cmd_pose.orientation.x = self.yaw_angle_Q[0]
+                self.cmd_pose.orientation.y = self.yaw_angle_Q[1]
+                self.cmd_pose.orientation.z = self.yaw_angle_Q[2]
+                self.cmd_pose.orientation.w = self.yaw_angle_Q[3]
+                if self.mode == 'charlie':
+                    print(f"Rotate CCW for {math.degrees(self.yaw_angle)} degrees.\n---")
 
-    #def send_command(self, cmd):
+        if self.mode == 'zulu':
+            self.recv_stop = False
+            if 'climb' in self.detected_word:
+                while not self.recv_stop:
+                    self.cmd_pose.position.z = self.current_pose_odom.position.z + 0.1
+                    #if self.recv_stop == True:
+                        #break
+                self.recv_stop = False
 
+    def eul_to_quat(self, num):
+        """ Function for transforming Euler angles to Quaternion"""
+        x = 0; y = 0; z = num[2]
 
+        qx = math.sin(x/2) * math.cos(y/2) * math.cos(z/2) - math.cos(x/2) * math.sin(y/2) * math.sin(y/2)
+        qy = math.cos(x/2) * math.sin(y/2) * math.cos(z/2) + math.sin(x/2) * math.cos(y/2) * math.sin(z/2)
+        qz = math.cos(x/2) * math.cos(y/2) * math.sin(z/2) - math.sin(x/2) * math.sin(y/2) * math.cos(z/2)
+        qw = math.cos(x/2) * math.cos(y/2) * math.cos(z/2) + math.sin(x/2) * math.sin(y/2) * math.sin(z/2)
+
+        return [qx, qy, qz, qw]
+
+    def quat_to_eul(self, orientation):
+        """ Function for transforming Quaternion to Euler angles"""
+        x = orientation.x; y = orientation.y; z = orientation.z; w = orientation.w
+
+        t0 = 2.0 * (w * x + y * z)
+        t1 = 1.0 - 2.0 * (x * x + y * y)
+        eul_x = math.atan2(t0, t1)
+
+        t2 = 2.0 * (w * y - z * x)
+        t2 = 1.0 if t2 > 1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        eul_y = math.asin(t2)
+
+        t3 = 2.0 * (w * z + x * y)
+        t4 = 1.0 - 2.0 * (y * y + z * z)
+        eul_z = math.atan2(t3, t4)
+
+        return [eul_x, eul_y, eul_z]
 
     def run(self):
         while not rospy.is_shutdown():
 
-            # TODO: Change variables for sending cmd
-            # ONE VARIABLE FOR ODOMETRY READING AND CURRENT POSITION/ORIENTATION READING 
-            # ONE VARIABLE FOR CURRENT POSE COMMAND, DO NOT USE SAME VARIABLES FOR CURRENT POSE READING AND CURRENT COMMAND!!!!
-
-            if self.var == 'land':
+            if self.var == 'finish':
                 while not self.current_pose_odom.position.z < 0.1:
-                    # TODO: Create cmd_pose variable and initailze it as empty Pose message in constructor, use it for sending commands
-                    # self.cmd_pose.position.z = self.current_pose.position.z - 0.1
-                    # My idea was to use knowledge of current pose(position/orientation) and to decrease height value until we hit ground.
-
                     self.cmd_pose.position.z = self.current_pose_odom.position.z - 0.1
-                    # INVOKE publish in while loop / CAN BE IN send_command method
-                    # self.publish....
-                    # USE WHILE TO
                     self.pub_command.publish(self.cmd_pose.position, self.cmd_pose.orientation)
                 self.var = ''
 
-            """if self.var == 'climb':
-                epsilon_ = 0.01
-                self.wanted_pose.position.z = self.current_pose_odom.position.z + self.voice_detected_increment
-                # Nije tako trivijalno jer treba uzeti u obzir zadanu referencu (self.voice_detected_increment)
-                while not abs(self.current_pose_odom.position.z - self.wanted_pose.position.z) >= self.voice_detected_increment:
-                    self.cmd_pose.position.z = self.current_pose_odom.position.z + 0.1  # Assign cmd_pose.position
-                    self.pub_command.publish(self.cmd_pose.position, self.cmd_pose.orientation)
-                self.var = ''"""
-
             self.pub_command.publish(self.cmd_pose.position, self.cmd_pose.orientation)
 
+
 if __name__ == '__main__':
-    rospy.init_node('uav_control')
-    uc = UAV_Control()
-    uc.run()
+
+    try:
+        rospy.init_node('uav_control')
+        uc = UAV_Control()
+        uc.run()
+
+    except Exception as e:
+        print(e)
