@@ -142,7 +142,8 @@ class UAV_Control():
             if 'down' in self.detected_word:
                 self.wanted_pose.position.z = self.current_pose_odom.position.z - self.cmd_increment
                 while not round(self.current_pose_odom.position.z, 1) == round(self.wanted_pose.position.z, 1) or \
-                        round(self.current_pose_odom.poistion.z) == 0:
+                        round(self.current_pose_odom.position.z) == 0:
+                    print(round(self.current_pose_odom.position.z))
                     if self.mode == 'charlie' or self.mode == 'sierra':
                         self.cmd_pose.position.z = self.current_pose_odom.position.z - 0.14
                     elif self.mode == 'romeo' or self.mode == 'oscar':
@@ -193,8 +194,10 @@ class UAV_Control():
                 self.cmd_pose.orientation.y = self.yaw_angle_Q[1]
                 self.cmd_pose.orientation.z = self.yaw_angle_Q[2]
                 self.cmd_pose.orientation.w = self.yaw_angle_Q[3]
-                if self.mode == 'charlie':
+                if self.mode == 'oscar' or self.mode == 'sierra':
                     print(f"Rotate CCW for {math.degrees(self.yaw_angle)} degrees.\n---")
+                else:
+                    print(f"Rotate CW for {abs(math.degrees(self.yaw_angle))} degrees.\n---")
 
         if self.mode == 'zulu':
             self.recv_stop = False

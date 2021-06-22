@@ -5,7 +5,7 @@ mode:
     charlie: 1.0
 
 yaw_angle:
-    oscar: 45.0
-    romeo: 60.0       
-    sierra: 90.0      
-    charlie: 180.0
+    oscar: 30.0
+    romeo: -30.0      
+    sierra: 45.0     
+    charlie: -45.0
