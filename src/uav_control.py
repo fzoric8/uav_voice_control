@@ -4,7 +4,6 @@ import rospy
 import time
 import yaml
 import math
-import numpy as np
 from std_msgs.msg import String
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Pose
@@ -19,11 +18,10 @@ class UAV_Control():
         with open("/home/filip/catkin_ws/src/uav_voice_control/config/config.yml", "r") as ymlfile:
             self.cfg = yaml.load(ymlfile)
 
-        self.pub_command = rospy.Publisher('/uav/pose_ref', Pose, queue_size=10)
         self.detected_word = String()
         self.position = Point()
         self.orientation = Quaternion()
-        # self.odom = Odometry()
+
         self.rate = rospy.Rate(10)
         self.cmd_pose = Pose()
         self.wanted_pose = Pose()
@@ -37,11 +35,15 @@ class UAV_Control():
         self.yaw_angle_E = [0.0, 0.0, 0.0]
         self.yaw_angle_Q = [0.0, 0.0, 0.0, 0.0]
         self.var = ''
-        self.recv_stop = False
         self.detected_word = ''
+
+        # Subscribers
         rospy.Subscriber('/voice_recognition', String, self.received_stop_callback)
         rospy.Subscriber('/voice_recognition', String, self.command_callback)
         rospy.Subscriber('/uav/odometry', Odometry, self.odometry_callback)
+
+        # Publishers
+        self.pub_command = rospy.Publisher('/uav/pose_ref', Pose, queue_size=10)
 
         print(f"=====================\nCurrent mode: {self.mode}\n  Reference: {self.cmd_increment}\n  "
               f"Yaw angle reference: {self.yaw_angle}\nStart with begin\n---")
@@ -50,10 +52,6 @@ class UAV_Control():
         """Callback for reading current position via odometry"""
         self.current_pose_odom = msg.pose.pose
 
-    def received_stop_callback(self, msg):
-        if str(msg.data) == 'stop ':
-            self.recv_stop = True
-            print(self.recv_stop)
 
     def command_callback(self, msg):
         self.detected_word = str(msg.data)
@@ -64,54 +62,48 @@ class UAV_Control():
             self.cmd_increment = self.cfg["mode"]["charlie"]
             self.yaw_angle = math.radians(self.cfg["yaw_angle"]["charlie"])
             print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
-                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n  Only in this mode is possible begin & finish\n---")
+                  f"\n  Yaw angle reference: {math.degrees(self.yaw_angle)}\n  "
+                  f"Only in this mode is possible begin & finish\n---")
 
         elif 'oscar' in self.detected_word:
             self.mode = 'oscar'
             self.cmd_increment = self.cfg["mode"]["oscar"]
             self.yaw_angle = math.radians(self.cfg["yaw_angle"]["oscar"])
             print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
-                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n---")
+                  f"\n  Yaw angle reference: {math.degrees(self.yaw_angle)}\n---")
 
         elif 'romeo' in self.detected_word:
             self.mode = 'romeo'
             self.cmd_increment = self.cfg["mode"]["romeo"]
             self.yaw_angle = math.radians(self.cfg["yaw_angle"]["romeo"])
             print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
-                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n---")
+                  f"\n  Yaw angle reference: {math.degrees(self.yaw_angle)}\n---")
 
         elif 'sierra' in self.detected_word:
             self.mode = 'sierra'
             self.cmd_increment = self.cfg["mode"]["sierra"]
             self.yaw_angle = math.radians(self.cfg["yaw_angle"]["sierra"])
             print(f"=====================\nSwitch mode:\n  Current mode: {self.mode}\n  Reference: {self.cmd_increment}"
-                  f"\n  Yaw angle reference: \n{self.yaw_angle}\n---")
-
-        elif 'zulu' in self.detected_word:
-            self.mode = 'zulu'
-            print("======================")
-            print(f"Switch mode:\n  Current mode: {self.mode}\n---")
+                  f"\n  Yaw angle reference: {math.degrees(self.yaw_angle)}\n---")
 
         """ Mode: Charlie
                 - emergency mode
                 - reference: 1 meter
-                - yaw: 180deg
+                - yaw: -45deg
                 - takeoff & finish only possible in this mode 
             
             Mode: Oscar
                 - fine control mode
                 - reference: 0.1 meter
-                - yaw: 45deg 
+                - yaw: 30deg 
 
             Mode: Romeo
                 - reference: 0.3 meter
-                - yaw: 60deg 
+                - yaw: -30deg 
 
             Mode: Sierra
                 - reference: 0.5 meter
-                - yaw: 90deg 
-
-            Mode: Zulu """
+                - yaw: 45deg """
 
         """ Begin & finish """
         if self.mode == 'charlie':
@@ -194,19 +186,11 @@ class UAV_Control():
                 self.cmd_pose.orientation.y = self.yaw_angle_Q[1]
                 self.cmd_pose.orientation.z = self.yaw_angle_Q[2]
                 self.cmd_pose.orientation.w = self.yaw_angle_Q[3]
-                if self.mode == 'oscar' or self.mode == 'sierra':
+                if self.yaw_angle > 0:
                     print(f"Rotate CCW for {math.degrees(self.yaw_angle)} degrees.\n---")
                 else:
                     print(f"Rotate CW for {abs(math.degrees(self.yaw_angle))} degrees.\n---")
 
-        if self.mode == 'zulu':
-            self.recv_stop = False
-            if 'climb' in self.detected_word:
-                while not self.recv_stop:
-                    self.cmd_pose.position.z = self.current_pose_odom.position.z + 0.1
-                    #if self.recv_stop == True:
-                        #break
-                self.recv_stop = False
 
     def eul_to_quat(self, num):
         """ Function for transforming Euler angles to Quaternion"""
