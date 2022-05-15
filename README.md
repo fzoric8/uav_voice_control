@@ -10,10 +10,9 @@ Firstly install all packages which are required for running `PocketSphinx`:
 sudo apt-get install python3-pip
 sudo apt-get install libasound-dev
 ```
-Extract `/tools/pa_stable_candidate_v190700_rc2_20210331.tgz`:
+Extract `pa_stable_candidate_v190700_rc2_20210331.tgz`:
 
 ```bash
-cd tools
 tar zxvf pa_stable_candidate_v190700_rc2_20210331.tgz
 cd portaudio
 ./configure
