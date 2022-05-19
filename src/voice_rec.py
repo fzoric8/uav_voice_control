@@ -30,7 +30,7 @@ if __name__ == '__main__':
     # Instantiate LiveSpeech class 
     speech = LiveSpeech(lm=False,
 			# Set relative path here for key.list -> should work on any PC
-                        kws='/home/filip/catkin_ws/src/uav_voice_control/src/key.list', verbose=False,
+                        kws='/home/goran/epfl_ws/src/uav_voice_control/src/epfl-key.list', verbose=False,
                         no_search=False, full_utt=False, buffer_size=2048, sampling_rate=16000)
 			# If you don't pass any argument while creating an instance of Pockesphinx, AudioFile or 
                         # LiveSpeech class, it will use next default values: https://github.com/bambocher/pocketsphinx-python#default-config
